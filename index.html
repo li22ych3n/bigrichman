@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>大富翁</title>
+    <style>
+        :root { --primary-color: #0984e3; --bg-color: #dfe6e9; --cell-size: 100px; }
+        body { font-family: "Microsoft JhengHei", sans-serif; background-color: var(--bg-color); display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        
+        /* 設定介面 */
+        #setup-screen { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 450px; }
+        .input-group { margin-bottom: 15px; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+
+        /* 遊戲介面 */
+        #game-screen { display: none; text-align: center; }
+        #timer-banner { background: #d63031; color: white; padding: 10px 30px; border-radius: 50px; font-size: 22px; font-weight: bold; margin-bottom: 15px; display: inline-block; }
+        
+        .board { display: grid; grid-template-columns: repeat(6, var(--cell-size)); grid-template-rows: repeat(6, var(--cell-size)); gap: 6px; background: #2d3436; padding: 10px; border-radius: 12px; }
+        .cell { background: white; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; position: relative; text-align: center; padding: 5px; box-shadow: inset 0 0 5px rgba(0,0,0,0.1); }
+        .start { background: #ff7675 !important; color: white; }
+        .quiz-cell { background: #ffeaa7; color: #d35400; border: 1px solid #fdcb6e; }
+
+        /* 棋子 */
+        .player { width: 32px; height: 32px; border-radius: 50%; position: absolute; border: 2px solid white; z-index: 10; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; transition: 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28); }
+
+        /* 控制台 */
+        .dashboard { margin-top: 20px; display: flex; gap: 15px; width: 620px; align-items: center; }
+        .player-status { flex: 1; padding: 15px; border-radius: 12px; background: white; border-left: 8px solid #ccc; text-align: left; }
+        .active-p { border-left-color: var(--primary-color); background: #e8f4fd; transform: scale(1.05); }
+        
+        button#roll-btn { padding: 15px 30px; font-size: 20px; background: var(--primary-color); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; }
+        button#roll-btn:disabled { background: #b2bec3; }
+
+        /* 題目彈窗 */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 15px; width: 450px; text-align: center; animation: popIn 0.3s ease; }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .opt-btn { width: 100%; padding: 15px; margin: 10px 0; border: 2px solid var(--primary-color); border-radius: 10px; background: white; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.2s; }
+        .opt-btn:hover { background: var(--primary-color); color: white; }
+    </style>
+</head>
+<body>
+
+    <div id="setup-screen">
+        <h1 style="text-align:center; color: var(--primary-color);">🧩 知識挑戰賽</h1>
+        <div class="input-group">
+            <label><b>1. 玩家名稱設定：</b></label>
+            <input type="text" id="p1-name" value="玩家 A" style="margin-bottom:5px;">
+            <input type="text" id="p2-name" value="玩家 B">
+        </div>
+        <div class="input-group">
+            <label><b>2. 初始資金：</b></label>
+            <input type="number" id="init-money" value="20000">
+        </div>
+        <div class="input-group">
+            <label><b>3. 遊戲時間 (分鐘)：</b></label>
+            <input type="number" id="game-time" value="10">
+        </div>
+        <div class="input-group">
+            <label><b>4. 匯入 CSV 題庫：</b></label>
+            <input type="file" id="csv-file" accept=".csv">
+        </div>
+        <button onclick="handleBoot()" style="width:100%; background:var(--primary-color); color:white; padding:15px; border:none; border-radius:10px; font-size:18px; cursor:pointer; font-weight:bold;">開始遊戲</button>
+    </div>
+
+    <div id="game-screen">
+        <div id="timer-banner">剩餘時間：--:--</div>
+        <div id="board" class="board"></div>
+        <div class="dashboard">
+            <div id="p1-info" class="player-status"></div>
+            <button id="roll-btn" onclick="playTurn()">擲骰子</button>
+            <div id="p2-info" class="player-status"></div>
+        </div>
+        <p id="hint-text" style="color: #636e72; margin-top: 10px;">提示：除起點外，每一格都是挑戰！</p>
+    </div>
+
+    <div id="quiz-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="quiz-player-name" style="color:var(--primary-color)">玩家請回答</h2>
+            <hr>
+            <h3 id="quiz-q" style="margin: 20px 0;">題目載入中...</h3>
+            <button class="opt-btn" onclick="checkAnswer(1)" id="opt1">選項 1</button>
+            <button class="opt-btn" onclick="checkAnswer(2)" id="opt2">選項 2</button>
+        </div>
+    </div>
+
+    <script>
+        let quizBank = [];
+        let players = [];
+        let turn = 0;
+        let timeLeft = 0;
+        let currentQuiz = null;
+
+        const cellMapping = ["6/1","5/1","4/1","3/1","2/1","1/1","1/2","1/3","1/4","1/5","1/6","2/6","3/6","4/6","5/6","6/6","6/5","6/4","6/3","6/2"];
+
+        function handleBoot() {
+            const file = document.getElementById('csv-file').files[0];
+            if(!file) { alert("請先匯入題庫 CSV 檔案！"); return; }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const rows = e.target.result.split('\n').filter(r => r.trim() !== "");
+                // 自動判斷是否有標題列（如果第一列包含"題目"字樣則跳過）
+                const startIdx = rows[0].includes("題目") ? 1 : 0;
+                
+                quizBank = rows.slice(startIdx).map(r => {
+                    const c = r.split(',');
+                    return { q: c[0]?.replace(/"/g, ''), ans: parseInt(c[1]), o1: c[2], o2: c[3] };
+                }).filter(i => i.q && !isNaN(i.ans));
+                
+                if(quizBank.length === 0) { alert("題庫解析失敗，請檢查 CSV 格式！"); return; }
+                initGame();
+            };
+            reader.readAsText(file);
+        }
+
+        function initGame() {
+            const p1n = document.getElementById('p1-name').value || "玩家 A";
+            const p2n = document.getElementById('p2-name').value || "玩家 B";
+            const money = parseInt(document.getElementById('init-money').value);
+            
+            players = [
+                { id: 1, name: p1n, pos: 0, money: money, color: '#e17055' },
+                { id: 2, name: p2n, pos: 0, money: money, color: '#0984e3' }
+            ];
+            timeLeft = document.getElementById('game-time').value * 60;
+            
+            document.getElementById('setup-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'block';
+            
+            renderBoard();
+            startTimer();
+            updateUI();
+        }
+
+        function renderBoard() {
+            const b = document.getElementById('board');
+            b.innerHTML = "";
+            for(let i=0; i<20; i++){
+                const c = document.createElement('div');
+                c.className = 'cell';
+                c.style.gridArea = cellMapping[i];
+                if(i === 0) { 
+                    c.innerText = "起點"; 
+                    c.classList.add('start'); 
+                } else { 
+                    c.innerText = "挑戰 " + i; 
+                    c.classList.add('quiz-cell'); 
+                }
+                c.id = 'cell-'+i;
+                b.appendChild(c);
+            }
+        }
+
+        function startTimer() {
+            const timer = setInterval(() => {
+                timeLeft--;
+                const m = Math.floor(timeLeft/60);
+                const s = timeLeft%60;
+                document.getElementById('timer-banner').innerText = `剩餘時間：${m}:${s<10?'0':''}${s}`;
+                if(timeLeft <= 0) { 
+                    clearInterval(timer); 
+                    endGame();
+                }
+            }, 1000);
+        }
+
+        function playTurn() {
+            const p = players[turn];
+            const dice = Math.floor(Math.random()*6)+1;
+            p.pos = (p.pos + dice) % 20;
+            updateUI();
+            
+            setTimeout(() => {
+                if(p.pos === 0) {
+                    alert(`回到起點！恭喜領取薪資 $2000`);
+                    p.money += 2000;
+                    nextTurn();
+                } else {
+                    showQuiz();
+                }
+            }, 600);
+        }
+
+        function showQuiz() {
+            const p = players[turn];
+            currentQuiz = quizBank[Math.floor(Math.random()*quizBank.length)];
+            document.getElementById('quiz-player-name').innerText = `${p.name} 請回答`;
+            document.getElementById('quiz-q').innerText = currentQuiz.q;
+            document.getElementById('opt1').innerText = "1. " + currentQuiz.o1;
+            document.getElementById('opt2').innerText = "2. " + currentQuiz.o2;
+            document.getElementById('quiz-modal').style.display = 'flex';
+        }
+
+        function checkAnswer(userChoice) {
+            const p = players[turn];
+            document.getElementById('quiz-modal').style.display = 'none';
+            if(userChoice === currentQuiz.ans) {
+                alert("✅ 答對了！獎金 $3000");
+                p.money += 3000;
+            } else {
+                alert(`❌ 答錯了！正確答案是選項(${currentQuiz.ans})`);
+                p.money -= 1000;
+            }
+            nextTurn();
+        }
+
+        function nextTurn() {
+            turn = (turn + 1) % players.length;
+            updateUI();
+        }
+
+        function updateUI() {
+            document.querySelectorAll('.player').forEach(e => e.remove());
+            players.forEach((p, idx) => {
+                const cell = document.getElementById('cell-'+p.pos);
+                const pEl = document.createElement('div');
+                pEl.className = 'player';
+                pEl.style.backgroundColor = p.color;
+                pEl.innerText = p.name[0];
+                if(idx === 1) pEl.style.bottom="5px"; else pEl.style.top="5px";
+                cell.appendChild(pEl);
+                
+                const info = document.getElementById(`p${p.id}-info`);
+                info.innerHTML = `<b>${p.name}</b><br>資產: $${p.money}`;
+                info.className = (turn === idx) ? "player-status active-p" : "player-status";
+            });
+        }
+
+        function endGame() {
+            document.getElementById('roll-btn').disabled = true;
+            const winner = players[0].money > players[1].money ? players[0] : players[1];
+            alert(`⌛ 時間到！遊戲結束！\n\n🏆 贏家：${winner.name}\n總資產：$${winner.money}`);
+        }
+    </script>
+</body>
+</html>
