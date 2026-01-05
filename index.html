@@ -2,229 +2,183 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>大富翁</title>
+    <title>線上大富翁 - 穩定連線版</title>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
     <style>
-        :root { --p1-color: #e17055; --p2-color: #0984e3; --cell-size: 90px; }
+        :root { --p1-color: #e17055; --p2-color: #0984e3; --cell-size: 85px; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: #dfe6e9; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         #setup-screen, #game-screen { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 550px; text-align: center; }
-        #game-screen { display: none; width: auto; }
-        .board { display: grid; grid-template-columns: repeat(6, var(--cell-size)); grid-template-rows: repeat(6, var(--cell-size)); gap: 5px; background: #2d3436; padding: 10px; border-radius: 10px; }
-        .cell { background: white; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; position: relative; text-align: center; }
+        #game-screen { display: none; }
+        .board { display: grid; grid-template-columns: repeat(6, var(--cell-size)); grid-template-rows: repeat(6, var(--cell-size)); gap: 5px; background: #2d3436; padding: 10px; border-radius: 10px; margin-bottom: 20px; }
+        .cell { background: white; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; position: relative; text-align: center; height: var(--cell-size); }
         .start { background: #ff7675 !important; color: white; }
-        .player { width: 35px; height: 35px; border-radius: 50%; position: absolute; border: 2px solid white; z-index: 10; display: flex; align-items: center; justify-content: center; color: white; transition: 0.6s; font-weight: bold; font-size: 14px; }
-        .dashboard { margin-top: 20px; display: flex; justify-content: space-between; gap: 15px; }
-        .p-box { flex: 1; padding: 15px; border-radius: 10px; background: #f1f2f6; border-left: 10px solid #ccc; text-align: left; }
-        .active-p { border-left-color: #00b894; background: #e8fcf9; }
-        button { padding: 12px 25px; background: #0984e3; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        button:disabled { background: #b2bec3; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; align-items: center; justify-content: center; }
-        .modal-content { background: white; padding: 30px; border-radius: 15px; width: 400px; text-align: center; }
-        .opt-btn { width: 100%; padding: 15px; margin: 10px 0; border: 2px solid #0984e3; border-radius: 10px; background: white; font-weight: bold; cursor: pointer; }
-        .admin-area { margin-top: 20px; padding-top: 20px; border-top: 2px dashed #ccc; }
+        .player { width: 30px; height: 30px; border-radius: 50%; position: absolute; border: 2px solid white; z-index: 10; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; }
+        button { padding: 12px 25px; background: #0984e3; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; margin: 5px; }
+        button:disabled { background: #b2bec3; cursor: not-allowed; }
+        .admin-area { margin-top: 20px; padding-top: 20px; border-top: 2px dashed #ccc; background: #fff5f5; border-radius: 10px; }
+        .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; align-items:center; justify-content:center; }
+        .modal-content { background:white; padding:30px; border-radius:15px; width:400px; text-align:center; }
     </style>
 </head>
 <body>
 
     <div id="setup-screen">
-        <h2 id="room-title">🎲 進入對戰房間</h2>
-        
-        <div id="player-area">
-            <label><b>請輸入你的暱稱：</b></label>
-            <input type="text" id="user-name" placeholder="例如：玩家 A" style="width:100%; padding:10px; margin-top:10px; border:1px solid #ddd; border-radius:5px;">
+        <h2>🎲 知識大富翁連線版</h2>
+        <div>
+            <input type="text" id="user-name" placeholder="輸入暱稱" style="padding:10px; width:200px;">
             <div style="margin: 15px 0;">
-                <button onclick="joinGame('p1')" id="btn-p1" style="background:var(--p1-color)">擔任玩家 1 (紅)</button>
-                <button onclick="joinGame('p2')" id="btn-p2" style="background:var(--p2-color)">擔任玩家 2 (藍)</button>
+                <button onclick="joinGame('p1')" id="btn-p1">擔任玩家 1 (紅)</button>
+                <button onclick="joinGame('p2')" id="btn-p2">擔任玩家 2 (藍)</button>
             </div>
-            <p id="room-status" style="font-size:12px; color:gray;">等待管理員初始化...</p>
+            <p id="room-status" style="color:gray;">正在連線至伺服器...</p>
         </div>
 
         <div class="admin-area">
-            <p style="color:red; font-size:14px;">🛠️ <b>管理員控制 (由你操作)</b></p>
-            <input type="file" id="csv-file" accept=".csv" style="font-size:12px;"><br><br>
-            <button onclick="adminReset()" style="background:#2d3436; font-size:12px; padding:5px 10px;">初始化/重設遊戲題庫</button>
+            <p>🛠️ <b>管理員初始化區</b></p>
+            <input type="file" id="csv-file" accept=".csv"><br><br>
+            <button onclick="adminReset()" style="background:#2d3436;">初始化/重設遊戲題庫</button>
         </div>
     </div>
 
     <div id="game-screen">
         <div id="board" class="board"></div>
-        <div class="dashboard">
-            <div id="p1-info" class="p-box">等待 P1...</div>
+        <div style="display:flex; justify-content: space-around;">
+            <div id="p1-info" style="padding:10px; border-bottom:5px solid var(--p1-color)">P1</div>
             <button id="roll-btn" onclick="handleRoll()">擲骰子</button>
-            <div id="p2-info" class="p-box">等待 P2...</div>
+            <div id="p2-info" style="padding:10px; border-bottom:5px solid var(--p2-color)">P2</div>
         </div>
-        <div id="status-msg" style="margin-top: 15px; font-weight: bold;"></div>
     </div>
 
     <div id="quiz-modal" class="modal">
         <div class="modal-content">
-            <h3 id="quiz-q">題目</h3>
-            <button class="opt-btn" id="opt1" onclick="submitAns(1)">選項 1</button>
-            <button class="opt-btn" id="opt2" onclick="submitAns(2)">選項 2</button>
+            <h3 id="quiz-q">題目載入中</h3>
+            <button onclick="submitAns(1)" id="opt1" style="width:100%">選項 1</button>
+            <button onclick="submitAns(2)" id="opt2" style="width:100%">選項 2</button>
         </div>
     </div>
 
     <script>
-   
-        import { initializeApp } from "firebase/app";
-        import { getAnalytics } from "firebase/analytics";
-
         const firebaseConfig = {
-        apiKey: "AIzaSyANdx-dIT_TDrIqYgSCOwLwHnl5dfRgd1M",
-        authDomain: "monopolyonline-e202d.firebaseapp.com",
-        projectId: "monopolyonline-e202d",
-        storageBucket: "monopolyonline-e202d.firebasestorage.app",
-        messagingSenderId: "812568712440",
-        appId: "1:812568712440:web:d2f1c5bfefa869c6ead70d",
-        measurementId: "G-1SKX15SPK0"
+            apiKey: "AIzaSyANdx-dIT_TDrIqYgSCOwLwHnl5dfRgd1M",
+            authDomain: "monopolyonline-e202d.firebaseapp.com",
+            projectId: "monopolyonline-e202d",
+            databaseURL: "https://monopolyonline-e202d-default-rtdb.firebaseio.com",
+            storageBucket: "monopolyonline-e202d.firebasestorage.app",
+            messagingSenderId: "812568712440",
+            appId: "1:812568712440:web:d2f1c5bfefa869c6ead70d"
         };
-
- 
-        const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
-        // ------------------------------
 
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-        let myRole = ""; 
-        let gameData = null;
+        let myRole = "", gameData = null;
         const cellMapping = ["6/1","5/1","4/1","3/1","2/1","1/1","1/2","1/3","1/4","1/5","1/6","2/6","3/6","4/6","5/6","6/6","6/5","6/4","6/3","6/2"];
 
-        // 監控房間狀態
         db.ref('room1').on('value', (snap) => {
             gameData = snap.val();
-            const statusText = document.getElementById('room-status');
-            const btn1 = document.getElementById('btn-p1');
-            const btn2 = document.getElementById('btn-p2');
-
+            const status = document.getElementById('room-status');
             if (!gameData || !gameData.quiz) {
-                statusText.innerText = "⚠️ 管理員尚未上傳題庫，請稍候...";
-                btn1.disabled = btn2.disabled = true;
+                status.innerText = "⚠️ 請管理員先選擇 CSV 並點擊初始化";
+                document.getElementById('btn-p1').disabled = document.getElementById('btn-p2').disabled = true;
             } else {
-                statusText.innerText = "✅ 遊戲已就緒，請選擇角色進入";
-                btn1.disabled = (gameData.p1 && gameData.p1.active);
-                btn2.disabled = (gameData.p2 && gameData.p2.active);
-                if (gameData.status === 'playing' && myRole !== "") {
-                    updateUI();
-                }
+                status.innerText = "✅ 房間已準備好，請選角進入";
+                document.getElementById('btn-p1').disabled = gameData.p1.active;
+                document.getElementById('btn-p2').disabled = gameData.p2.active;
+                if (gameData.status === 'playing' && myRole) updateUI();
             }
+        }, (error) => {
+            alert("Firebase 連線失敗！請檢查 Database Rules。");
         });
 
-        // 管理員功能：上傳 CSV 並清空舊資料
         function adminReset() {
+            console.log("初始化按鈕被點擊");
             const file = document.getElementById('csv-file').files[0];
-            if (!file) { alert("請先選擇 CSV 檔案！"); return; }
-            
+            if (!file) { alert("請先選取 CSV 檔案！"); return; }
+
             const reader = new FileReader();
             reader.onload = function(e) {
-                const rows = e.target.result.split('\n').filter(r => r.trim() !== "");
-                const startIdx = rows[0].includes("題目") ? 1 : 0;
-                const quiz = rows.slice(startIdx).map(r => {
-                    const c = r.split(',');
-                    return { q: c[0], ans: parseInt(c[1]), o1: c[2], o2: c[3] };
-                });
+                try {
+                    const lines = e.target.result.split(/\r?\n/).filter(l => l.trim() !== "");
+                    const startIndex = (lines[0].includes("題目") || lines[0].includes("答案")) ? 1 : 0;
+                    const quiz = lines.slice(startIndex).map(line => {
+                        const p = line.split(',').map(s => s.replace(/^"|"$/g, '').trim());
+                        return { q: p[0], ans: parseInt(p[1]) || 1, o1: p[2] || "選項1", o2: p[3] || "選項2" };
+                    }).filter(i => i.q);
 
-                db.ref('room1').set({
-                    status: 'ready',
-                    turn: 'p1',
-                    p1: { name: "等待中", pos: 0, money: 20000, active: false },
-                    p2: { name: "等待中", pos: 0, money: 20000, active: false },
-                    quiz: quiz
-                });
-                alert("管理員：題庫上傳完成！現在玩家可以進入了。");
+                    db.ref('room1').set({
+                        status: 'ready', turn: 'p1', quiz: quiz,
+                        p1: { name: "", pos: 0, money: 20000, active: false },
+                        p2: { name: "", pos: 0, money: 20000, active: false }
+                    }).then(() => alert("🎉 初始化成功！載入 " + quiz.length + " 題"));
+                } catch (err) {
+                    alert("檔案讀取出錯：" + err.message);
+                }
             };
-            reader.readAsText(file);
+            reader.readAsText(file, "UTF-8");
         }
 
-        // 玩家功能：輸入姓名並加入
         function joinGame(role) {
-            const myName = document.getElementById('user-name').value;
-            if (!myName) { alert("請先輸入暱稱！"); return; }
-            
+            const name = document.getElementById('user-name').value;
+            if (!name) return alert("請輸入名字");
             myRole = role;
-            db.ref(`room1/${role}`).update({
-                name: myName,
-                active: true
-            });
+            db.ref(`room1/${role}`).update({ name: name, active: true });
             db.ref('room1').update({ status: 'playing' });
-
             document.getElementById('setup-screen').style.display = 'none';
             document.getElementById('game-screen').style.display = 'block';
             initBoard();
         }
 
-        // ... 以下為遊戲邏輯 (與前版相同) ...
         function initBoard() {
             const board = document.getElementById('board');
             board.innerHTML = "";
             for(let i=0; i<20; i++){
                 const c = document.createElement('div');
-                c.className = 'cell ' + (i===0 ? 'start' : '');
+                c.className = 'cell ' + (i===0?'start':'');
                 c.style.gridArea = cellMapping[i];
-                c.innerText = i === 0 ? "起點" : i;
-                c.id = 'cell-' + i;
+                c.id = 'cell-'+i;
+                c.innerText = i===0?"起點":"關卡"+i;
                 board.appendChild(c);
             }
         }
 
         function updateUI() {
-            document.querySelectorAll('.player').forEach(el => el.remove());
-            ['p1', 'p2'].forEach((pKey, idx) => {
-                const p = gameData[pKey];
-                const cell = document.getElementById('cell-' + p.pos);
+            document.querySelectorAll('.player').forEach(e => e.remove());
+            ['p1','p2'].forEach((k, idx) => {
+                const p = gameData[k];
+                const cell = document.getElementById('cell-'+p.pos);
                 if(cell) {
                     const el = document.createElement('div');
                     el.className = 'player';
-                    el.style.backgroundColor = pKey === 'p1' ? 'var(--p1-color)' : 'var(--p2-color)';
-                    el.innerText = p.name ? p.name[0] : "?";
-                    if (idx === 1) el.style.bottom = "5px"; else el.style.top = "5px";
+                    el.style.backgroundColor = k==='p1'?'var(--p1-color)':'var(--p2-color)';
+                    el.innerText = p.name ? p.name[0] : "";
+                    if(idx===1) el.style.bottom="2px"; else el.style.top="2px";
                     cell.appendChild(el);
                 }
-                const info = document.getElementById(`${pKey}-info`);
-                info.innerHTML = `<b>${p.name}</b><br>💰 $${p.money}`;
-                info.className = (gameData.turn === pKey) ? "p-box active-p" : "p-box";
+                document.getElementById(k+'-info').innerText = `${p.name}: $${p.money}`;
             });
-            const isMyTurn = (gameData.turn === myRole);
-            document.getElementById('roll-btn').disabled = !isMyTurn;
-            document.getElementById('status-msg').innerText = isMyTurn ? "🌟 輪到你了！" : `⏳ 等待 ${gameData[gameData.turn].name}...`;
+            document.getElementById('roll-btn').disabled = (gameData.turn !== myRole);
         }
 
         function handleRoll() {
-            const steps = Math.floor(Math.random() * 6) + 1;
+            const steps = Math.floor(Math.random()*6)+1;
             const newPos = (gameData[myRole].pos + steps) % 20;
             db.ref(`room1/${myRole}`).update({ pos: newPos });
-            
             setTimeout(() => {
-                if (newPos === 0) {
-                    alert("回到起點，領取薪資 $2000！");
-                    db.ref(`room1/${myRole}`).update({ money: gameData[myRole].money + 2000 });
-                    switchTurn();
-                } else {
-                    const q = gameData.quiz[Math.floor(Math.random() * gameData.quiz.length)];
-                    window.currentAns = q.ans;
-                    document.getElementById('quiz-q').innerText = q.q;
-                    document.getElementById('opt1').innerText = "1. " + q.o1;
-                    document.getElementById('opt2').innerText = "2. " + q.o2;
-                    document.getElementById('quiz-modal').style.display = 'flex';
-                }
+                const q = gameData.quiz[Math.floor(Math.random()*gameData.quiz.length)];
+                window.currentAns = q.ans;
+                document.getElementById('quiz-q').innerText = q.q;
+                document.getElementById('opt1').innerText = q.o1;
+                document.getElementById('opt2').innerText = q.o2;
+                document.getElementById('quiz-modal').style.display = 'flex';
             }, 600);
         }
 
-        function submitAns(choice) {
+        function submitAns(c) {
             document.getElementById('quiz-modal').style.display = 'none';
-            if (choice === window.currentAns) {
-                alert("正確！獎金 $3000");
-                db.ref(`room1/${myRole}`).update({ money: gameData[myRole].money + 3000 });
-            } else {
-                alert("錯誤！罰款 $1000");
-                db.ref(`room1/${myRole}`).update({ money: gameData[myRole].money - 1000 });
-            }
-            switchTurn();
-        }
-
-        function switchTurn() {
-            db.ref('room1').update({ turn: myRole === 'p1' ? 'p2' : 'p1' });
+            const reward = (c === window.currentAns) ? 3000 : -1000;
+            alert(c === window.currentAns ? "正確！+$3000" : "錯誤！-$1000");
+            db.ref(`room1/${myRole}`).update({ money: gameData[myRole].money + reward });
+            db.ref('room1').update({ turn: myRole==='p1'?'p2':'p1' });
         }
     </script>
 </body>
