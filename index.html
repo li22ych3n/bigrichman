@@ -59,6 +59,7 @@
     </div>
 
     <script>
+        // Firebase 配置 (請保持你的原樣)
         const firebaseConfig = {
             apiKey: "AIzaSyANdx-dIT_TDrIqYgSCOwLwHnl5dfRgd1M",
             authDomain: "monopolyonline-e202d.firebaseapp.com",
@@ -74,79 +75,74 @@
         let myRole = "", gameData = null;
         const cellMapping = ["6/1","5/1","4/1","3/1","2/1","1/1","1/2","1/3","1/4","1/5","1/6","2/6","3/6","4/6","5/6","6/6","6/5","6/4","6/3","6/2"];
 
+        // --- 關鍵：全域監控器 ---
         db.ref('room1').on('value', (snap) => {
             gameData = snap.val();
+            if (!gameData) return;
+
             const setupScreen = document.getElementById('setup-screen');
             const gameScreen = document.getElementById('game-screen');
             const statusText = document.getElementById('room-status');
 
-            if (!gameData || !gameData.quiz) {
-                // 1. 完全沒資料：所有人待在初始化畫面
-                statusText.innerText = "⚠️ 等待管理員初始化題庫...";
+            // 1. 同步題庫狀態
+            if (!gameData.quiz) {
+                statusText.innerText = "⏳ 等待管理員初始化題庫...";
                 setupScreen.style.display = 'block';
                 gameScreen.style.display = 'none';
             } else {
-                // 2. 有資料了：
-                // 如果我還沒選角，讓我待在選角區（但管理員區會被隱藏）
-                if (myRole === "") {
+                // 2. 題庫已存在，根據「我是否已選角」決定畫面
+                if (!myRole) {
                     setupScreen.style.display = 'block';
                     gameScreen.style.display = 'none';
-                    statusText.innerText = "✅ 題庫已載入，請選擇角色進入";
+                    statusText.innerText = "✅ 題庫已由管理員同步，請選角進入遊戲";
                     
-                    // 自動隱藏管理員控制區（避免路人亂按）
+                    // 同步按鈕狀態：如果有人選了，其他人就不能再按
+                    document.getElementById('btn-p1').disabled = gameData.p1?.active;
+                    document.getElementById('btn-p2').disabled = gameData.p2?.active;
+                    
+                    // 同步隱藏管理員控制區（只有未選角前能看到，上傳後消失）
                     document.querySelector('.admin-area').style.display = 'none';
-                    
-                    // 更新按鈕狀態（如果有人選了就不能再按）
-                    document.getElementById('btn-p1').disabled = gameData.p1.active;
-                    document.getElementById('btn-p2').disabled = gameData.p2.active;
                 } else {
-                    // 3. 我已經選過角色了：直接進入遊戲畫面
+                    // 3. 我已選角：強制進入遊戲畫面
                     setupScreen.style.display = 'none';
                     gameScreen.style.display = 'block';
-                    initBoard(); // 初始化棋盤
-                    updateUI();   // 更新玩家位置與分數
+                    initBoard(); // 確保棋盤繪製
+                    updateUI();  // 確保玩家位置、金額同步
                 }
             }
-        }, (error) => {
-            console.error("Firebase 連線失敗:", error);
         });
 
         function adminReset() {
-            console.log("初始化按鈕被點擊");
             const file = document.getElementById('csv-file').files[0];
-            if (!file) { alert("請先選取 CSV 檔案！"); return; }
-
+            if (!file) return alert("請先選取 CSV！");
             const reader = new FileReader();
             reader.onload = function(e) {
-                try {
-                    const lines = e.target.result.split(/\r?\n/).filter(l => l.trim() !== "");
-                    const startIndex = (lines[0].includes("題目") || lines[0].includes("答案")) ? 1 : 0;
-                    const quiz = lines.slice(startIndex).map(line => {
-                        const p = line.split(',').map(s => s.replace(/^"|"$/g, '').trim());
-                        return { q: p[0], ans: parseInt(p[1]) || 1, o1: p[2] || "選項1", o2: p[3] || "選項2" };
-                    }).filter(i => i.q);
+                const lines = e.target.result.split(/\r?\n/).filter(l => l.trim() !== "");
+                const startIndex = (lines[0].includes("題目")) ? 1 : 0;
+                const quiz = lines.slice(startIndex).map(line => {
+                    const p = line.split(',').map(s => s.replace(/^"|"$/g, '').trim());
+                    return { q: p[0], ans: parseInt(p[1]) || 1, o1: p[2], o2: p[3] };
+                }).filter(i => i.q);
 
-                    db.ref('room1').set({
-                        status: 'ready', turn: 'p1', quiz: quiz,
-                        p1: { name: "", pos: 0, money: 20000, active: false },
-                        p2: { name: "", pos: 0, money: 20000, active: false }
-                    }).then(() => alert("🎉 初始化成功！載入 " + quiz.length + " 題"));
-                } catch (err) {
-                    alert("檔案讀取出錯：" + err.message);
-                }
+                // 重設整個房間，這會觸發所有人的畫面更新
+                db.ref('room1').set({
+                    status: 'ready',
+                    quiz: quiz,
+                    turn: 'p1',
+                    p1: { name: "", pos: 0, money: 20000, active: false },
+                    p2: { name: "", pos: 0, money: 20000, active: false }
+                });
+                alert("題庫已上傳並同步至雲端！");
             };
             reader.readAsText(file, "UTF-8");
         }
 
         function joinGame(role) {
             const name = document.getElementById('user-name').value;
-            if (!name) return alert("請輸入名字");
+            if (!name) return alert("請輸入暱稱");
             myRole = role;
             db.ref(`room1/${role}`).update({ name: name, active: true });
-            db.ref('room1').update({ status: 'playing' });
-            document.getElementById('setup-screen').style.display = 'none';
-            document.getElementById('game-screen').style.display = 'block';
-            initBoard();
+            // 不需要手動切換 display，上面的 .on('value') 會自動幫我們切換
         }
 
         function initBoard() {
