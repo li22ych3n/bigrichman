@@ -76,18 +76,39 @@
 
         db.ref('room1').on('value', (snap) => {
             gameData = snap.val();
-            const status = document.getElementById('room-status');
+            const setupScreen = document.getElementById('setup-screen');
+            const gameScreen = document.getElementById('game-screen');
+            const statusText = document.getElementById('room-status');
+
             if (!gameData || !gameData.quiz) {
-                status.innerText = "⚠️ 請管理員先選擇 CSV 並點擊初始化";
-                document.getElementById('btn-p1').disabled = document.getElementById('btn-p2').disabled = true;
+                // 1. 完全沒資料：所有人待在初始化畫面
+                statusText.innerText = "⚠️ 等待管理員初始化題庫...";
+                setupScreen.style.display = 'block';
+                gameScreen.style.display = 'none';
             } else {
-                status.innerText = "✅ 房間已準備好，請選角進入";
-                document.getElementById('btn-p1').disabled = gameData.p1.active;
-                document.getElementById('btn-p2').disabled = gameData.p2.active;
-                if (gameData.status === 'playing' && myRole) updateUI();
+                // 2. 有資料了：
+                // 如果我還沒選角，讓我待在選角區（但管理員區會被隱藏）
+                if (myRole === "") {
+                    setupScreen.style.display = 'block';
+                    gameScreen.style.display = 'none';
+                    statusText.innerText = "✅ 題庫已載入，請選擇角色進入";
+                    
+                    // 自動隱藏管理員控制區（避免路人亂按）
+                    document.querySelector('.admin-area').style.display = 'none';
+                    
+                    // 更新按鈕狀態（如果有人選了就不能再按）
+                    document.getElementById('btn-p1').disabled = gameData.p1.active;
+                    document.getElementById('btn-p2').disabled = gameData.p2.active;
+                } else {
+                    // 3. 我已經選過角色了：直接進入遊戲畫面
+                    setupScreen.style.display = 'none';
+                    gameScreen.style.display = 'block';
+                    initBoard(); // 初始化棋盤
+                    updateUI();   // 更新玩家位置與分數
+                }
             }
         }, (error) => {
-            alert("Firebase 連線失敗！請檢查 Database Rules。");
+            console.error("Firebase 連線失敗:", error);
         });
 
         function adminReset() {
